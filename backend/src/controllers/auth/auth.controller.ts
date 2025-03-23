@@ -14,7 +14,7 @@ const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || "your-default-jwt-secret";
 
 // Register a new user
-export const register = async (req: Request, res: Response) => {
+export const register = async (req: Request, res: Response): Promise<void> => {
   const { email, password, name } = req.body;
 
   try {
@@ -24,7 +24,8 @@ export const register = async (req: Request, res: Response) => {
     });
 
     if (existingUser) {
-      return res.status(400).json({ error: "User already exists" });
+      res.status(400).json({ error: "User already exists" });
+      return;
     }
 
     // Hash the password
@@ -61,7 +62,7 @@ export const register = async (req: Request, res: Response) => {
 };
 
 // Login user
-export const login = async (req: Request, res: Response) => {
+export const login = async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body;
 
   try {
@@ -71,24 +72,27 @@ export const login = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      res.status(404).json({ error: "User not found" });
+      return;
     }
 
     // Check password
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
     }
 
     // Check if 2FA is enabled
     if (user.twoFactorEnabled) {
       // For 2FA flow, we would generate a temporary token
       // This is simplified for the MVP
-      return res.status(200).json({
+      res.status(200).json({
         requireTwoFactor: true,
         userId: user.id,
       });
+      return;
     }
 
     // Create and send JWT token
@@ -112,11 +116,12 @@ export const login = async (req: Request, res: Response) => {
 };
 
 // Request password reset
-export const forgotPassword = async (req: Request, res: Response) => {
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
   const { email } = req.body;
 
   if (!email) {
-    return res.status(400).json({ error: "Email is required" });
+    res.status(400).json({ error: "Email is required" });
+    return;
   }
 
   try {
@@ -127,16 +132,18 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
     // For security reasons, don't reveal if the email exists or not
     if (!user) {
-      return res.status(200).json({ 
+      res.status(200).json({ 
         message: "If your email is registered, you will receive a password reset link" 
       });
+      return;
     }
 
     // Check rate limiting
     if (checkResetRateLimit(email)) {
-      return res.status(429).json({ 
+      res.status(429).json({ 
         error: "Too many reset attempts. Please try again later." 
       });
+      return;
     }
 
     // Generate a secure token
@@ -160,7 +167,8 @@ export const forgotPassword = async (req: Request, res: Response) => {
     );
 
     if (!emailSent) {
-      return res.status(500).json({ error: "Failed to send reset email" });
+      res.status(500).json({ error: "Failed to send reset email" });
+      return;
     }
 
     // Return success message
@@ -174,11 +182,12 @@ export const forgotPassword = async (req: Request, res: Response) => {
 };
 
 // Reset password with token
-export const resetPassword = async (req: Request, res: Response) => {
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
   const { token, password } = req.body;
 
   if (!token || !password) {
-    return res.status(400).json({ error: "Token and password are required" });
+    res.status(400).json({ error: "Token and password are required" });
+    return;
   }
 
   try {
@@ -190,15 +199,18 @@ export const resetPassword = async (req: Request, res: Response) => {
 
     // Check if token exists and is valid
     if (!resetToken) {
-      return res.status(400).json({ error: "Invalid or expired token" });
+      res.status(400).json({ error: "Invalid or expired token" });
+      return;
     }
 
     if (resetToken.used) {
-      return res.status(400).json({ error: "Token has already been used" });
+      res.status(400).json({ error: "Token has already been used" });
+      return;
     }
 
     if (isTokenExpired(resetToken.expiresAt)) {
-      return res.status(400).json({ error: "Token has expired" });
+      res.status(400).json({ error: "Token has expired" });
+      return;
     }
 
     // Hash the new password
@@ -231,7 +243,7 @@ export const resetPassword = async (req: Request, res: Response) => {
 };
 
 // Logout user
-export const logout = async (req: Request, res: Response) => {
+export const logout = async (req: Request, res: Response): Promise<void> => {
   // Since we're using JWT, we don't need to do anything server-side
   // The client will remove the token from storage
   // This endpoint is mainly for logging purposes or future extensions
@@ -248,13 +260,14 @@ export const logout = async (req: Request, res: Response) => {
 };
 
 // Get current user
-export const getMe = async (req: Request, res: Response) => {
+export const getMe = async (req: Request, res: Response): Promise<void> => {
   try {
     // The user ID should be attached by the auth middleware
     const userId = req.user?.id;
 
     if (!userId) {
-      return res.status(401).json({ error: "Not authenticated" });
+      res.status(401).json({ error: "Not authenticated" });
+      return;
     }
 
     const user = await prisma.user.findUnique({
@@ -271,7 +284,8 @@ export const getMe = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      res.status(404).json({ error: "User not found" });
+      return;
     }
 
     res.status(200).json(user);
@@ -282,7 +296,7 @@ export const getMe = async (req: Request, res: Response) => {
 };
 
 // Update user settings
-export const updateUser = async (req: Request, res: Response) => {
+export const updateUser = async (req: Request, res: Response): Promise<void> => {
   const userId = req.user?.id;
   const { name, email } = req.body;
 
@@ -312,7 +326,7 @@ export const updateUser = async (req: Request, res: Response) => {
 };
 
 // Enable/disable 2FA (simplified for MVP)
-export const toggleTwoFactor = async (req: Request, res: Response) => {
+export const toggleTwoFactor = async (req: Request, res: Response): Promise<void> => {
   const userId = req.user?.id;
   const { enable } = req.body;
 
@@ -322,7 +336,8 @@ export const toggleTwoFactor = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      res.status(404).json({ error: "User not found" });
+      return;
     }
 
     // In a real implementation, we would generate and store a 2FA secret

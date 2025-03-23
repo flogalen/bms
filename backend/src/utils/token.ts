@@ -84,5 +84,7 @@ export const cleanupRateLimits = (): void => {
   }
 };
 
-// Set up periodic cleanup (every hour)
-setInterval(cleanupRateLimits, 60 * 60 * 1000);
+// Set up periodic cleanup (every hour) only in production
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(cleanupRateLimits, 60 * 60 * 1000);
+}
