@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  name              String?
+  password          String    // Hashed password
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  twoFactorEnabled  Boolean   @default(false)
+  twoFactorSecret   String?   // For 2FA
+  role              Role      @default(USER)
+  passwordResetTokens PasswordResetToken[]
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model PasswordResetToken {
+  id          String    @id @default(uuid())
+  token       String    @unique
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  used        Boolean   @default(false)
+}
+
+// Will expand with other models as we progress through sprints
