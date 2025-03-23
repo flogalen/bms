@@ -20,18 +20,20 @@ export const authenticateJWT = (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): void => {
   // Get token from header
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
-    return res.status(401).json({ error: "No token provided" });
+    res.status(401).json({ error: "No token provided" });
+    return;
   }
 
   // Check if auth header starts with Bearer
   const parts = authHeader.split(" ");
   if (parts.length !== 2 || parts[0] !== "Bearer") {
-    return res.status(401).json({ error: "Token error" });
+    res.status(401).json({ error: "Token error" });
+    return;
   }
 
   const token = parts[1];
@@ -50,17 +52,19 @@ export const authenticateJWT = (
     next();
   } catch (error) {
     console.error("JWT verification error:", error);
-    return res.status(401).json({ error: "Invalid token" });
+    res.status(401).json({ error: "Invalid token" });
   }
 };
 
 // Check if user has admin role
-export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
+export const isAdmin = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   if (req.user?.role !== "ADMIN") {
-    return res
-      .status(403)
-      .json({ error: "Access denied. Admin role required." });
+    res.status(403).json({ error: "Access denied. Admin role required." });
+    return;
   }
   next();
 };
-

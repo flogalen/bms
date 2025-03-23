@@ -40,7 +40,7 @@ jobs:
     
     - name: Run tests
       working-directory: ./backend
-      run: npm test
+      run: npx jest --detectOpenHandles
       env:
         NODE_ENV: test
         JWT_SECRET: test-jwt-secret

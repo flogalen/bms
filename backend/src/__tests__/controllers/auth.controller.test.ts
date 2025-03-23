@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import * as authController from '../../controllers/auth/auth.controller';
 import * as emailUtils from '../../utils/email';
 import * as tokenUtils from '../../utils/token';
+import { mockPrismaClient, setupPrismaMock } from '../../mocks/prisma.mock';
 
 // Mock dependencies
 jest.mock('bcrypt');
@@ -16,7 +17,6 @@ jest.mock('../../utils/token');
 describe('Auth Controller', () => {
   let mockRequest: Partial<Request>;
   let mockResponse: Partial<Response>;
-  let mockPrisma: any;
 
   beforeEach(() => {
     // Reset mocks
@@ -33,22 +33,8 @@ describe('Auth Controller', () => {
       json: jest.fn().mockReturnThis()
     };
 
-    // Mock Prisma
-    mockPrisma = {
-      user: {
-        findUnique: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn()
-      },
-      passwordResetToken: {
-        findUnique: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn()
-      }
-    };
-
-    // @ts-ignore - Mock the PrismaClient constructor
-    PrismaClient.mockImplementation(() => mockPrisma);
+    // Setup Prisma mock
+    setupPrismaMock();
   });
 
   describe('register', () => {

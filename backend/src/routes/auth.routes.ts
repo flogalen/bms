@@ -1,26 +1,41 @@
-import { Router, Request, Response, NextFunction } from "express";
+import { Router } from "express";
 import * as authController from "../controllers/auth/auth.controller";
 import { authenticateJWT } from "../middlewares/auth.middleware";
 
 const router = Router();
 
-// Helper function to wrap async controllers
-const asyncHandler = (fn: Function) => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    Promise.resolve(fn(req, res, next)).catch(next);
-  };
-};
-
 // Public routes
-router.post("/register", asyncHandler(authController.register));
-router.post("/login", asyncHandler(authController.login));
-router.post("/forgot-password", asyncHandler(authController.forgotPassword));
-router.post("/reset-password", asyncHandler(authController.resetPassword));
-router.post("/logout", asyncHandler(authController.logout));
+router.post("/register", (req, res, next) => {
+  authController.register(req, res).catch(next);
+});
+
+router.post("/login", (req, res, next) => {
+  authController.login(req, res).catch(next);
+});
+
+router.post("/forgot-password", (req, res, next) => {
+  authController.forgotPassword(req, res).catch(next);
+});
+
+router.post("/reset-password", (req, res, next) => {
+  authController.resetPassword(req, res).catch(next);
+});
+
+router.post("/logout", (req, res, next) => {
+  authController.logout(req, res).catch(next);
+});
 
 // Protected routes
-router.get("/me", authenticateJWT, asyncHandler(authController.getMe));
-router.put("/me", authenticateJWT, asyncHandler(authController.updateUser));
-router.post("/two-factor", authenticateJWT, asyncHandler(authController.toggleTwoFactor));
+router.get("/me", authenticateJWT, (req, res, next) => {
+  authController.getMe(req, res).catch(next);
+});
+
+router.put("/me", authenticateJWT, (req, res, next) => {
+  authController.updateUser(req, res).catch(next);
+});
+
+router.post("/two-factor", authenticateJWT, (req, res, next) => {
+  authController.toggleTwoFactor(req, res).catch(next);
+});
 
 export default router;

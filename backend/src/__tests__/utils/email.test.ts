@@ -58,7 +58,10 @@ describe('Email Utilities', () => {
     it('should handle errors gracefully', async () => {
       // Mock implementation to simulate an error
       const nodemailer = require('nodemailer');
-      nodemailer.createTransport.mockReturnValueOnce({
+      const originalTransport = nodemailer.createTransport;
+      
+      // Override the mock to simulate an error
+      nodemailer.createTransport = jest.fn().mockReturnValue({
         sendMail: jest.fn().mockRejectedValue(new Error('Failed to send email')),
         verify: jest.fn().mockResolvedValue(true)
       });
@@ -66,9 +69,13 @@ describe('Email Utilities', () => {
       const email = 'user@example.com';
       const token = 'reset-token-123';
 
-      const result = await sendPasswordResetEmail(email, token);
-
-      expect(result).toBe(false);
+      try {
+        const result = await sendPasswordResetEmail(email, token);
+        expect(result).toBe(false);
+      } finally {
+        // Restore the original mock
+        nodemailer.createTransport = originalTransport;
+      }
     });
   });
 
@@ -93,16 +100,23 @@ describe('Email Utilities', () => {
     it('should handle errors gracefully', async () => {
       // Mock implementation to simulate an error
       const nodemailer = require('nodemailer');
-      nodemailer.createTransport.mockReturnValueOnce({
+      const originalTransport = nodemailer.createTransport;
+      
+      // Override the mock to simulate an error
+      nodemailer.createTransport = jest.fn().mockReturnValue({
         sendMail: jest.fn().mockRejectedValue(new Error('Failed to send email')),
         verify: jest.fn().mockResolvedValue(true)
       });
 
       const email = 'user@example.com';
 
-      const result = await sendPasswordChangedEmail(email);
-
-      expect(result).toBe(false);
+      try {
+        const result = await sendPasswordChangedEmail(email);
+        expect(result).toBe(false);
+      } finally {
+        // Restore the original mock
+        nodemailer.createTransport = originalTransport;
+      }
     });
   });
 });

@@ -3,7 +3,9 @@ module.exports = {
   testEnvironment: "node",
   roots: ["<rootDir>/src"],
   transform: {
-    "^.+\\.tsx?$": "ts-jest",
+    "^.+\\.tsx?$": ["ts-jest", {
+      isolatedModules: true
+    }]
   },
   testRegex: "(/__tests__/.*|(\\.|/)(test|spec))\\.tsx?$",
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
@@ -14,10 +16,5 @@ module.exports = {
   resetMocks: true,
   testEnvironmentOptions: {
     NODE_ENV: "test"
-  },
-  globals: {
-    "ts-jest": {
-      isolatedModules: true
-    }
   }
 };
