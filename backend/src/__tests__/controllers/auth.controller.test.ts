@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
 import * as authController from '../../controllers/auth/auth.controller';
 import * as emailUtils from '../../utils/email';
 import * as tokenUtils from '../../utils/token';
@@ -10,37 +9,48 @@ import { mockPrisma, setupPrismaMock } from '../mocks/prisma.mock';
 // Mock dependencies
 jest.mock('bcrypt');
 jest.mock('jsonwebtoken');
-jest.mock('@prisma/client');
 jest.mock('../../utils/email');
 jest.mock('../../utils/token');
 
+// Initialize Prisma mock
+setupPrismaMock();
+
 describe('Auth Controller', () => {
-  let mockRequest: Partial<Request>;
-  let mockResponse: Partial<Response>;
+  // Set a higher timeout for all tests in this suite
+  jest.setTimeout(30000);
+
+  // Mock request and response objects
+  let req: Partial<Request>;
+  let res: Partial<Response>;
+  let resJson: jest.Mock;
+  let resStatus: jest.Mock;
 
   beforeEach(() => {
-    // Reset mocks
+    // Reset Prisma mock for each test
+    setupPrismaMock();
+    
+    // Clear other mock history but preserve implementations
     jest.clearAllMocks();
-
-    // Mock request and response
-    mockRequest = {
+    
+    // Set up mock request and response objects
+    resJson = jest.fn().mockReturnThis();
+    resStatus = jest.fn().mockReturnValue({ json: resJson });
+    
+    req = {
       body: {},
       user: { id: 'user-id', email: 'test@example.com', role: 'USER' }
     };
-
-    mockResponse = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn().mockReturnThis()
+    
+    res = {
+      status: resStatus,
+      json: resJson
     };
-
-    // Setup Prisma mock
-    setupPrismaMock();
   });
 
   describe('register', () => {
     it('should register a new user successfully', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         email: 'new@example.com',
         password: 'password123',
         name: 'New User'
@@ -65,10 +75,7 @@ describe('Auth Controller', () => {
       (jwt.sign as jest.Mock).mockReturnValue('jwt-token');
 
       // Act
-      await authController.register(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.register(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
@@ -84,8 +91,8 @@ describe('Auth Controller', () => {
         }
       });
       expect(jwt.sign).toHaveBeenCalled();
-      expect(mockResponse.status).toHaveBeenCalledWith(201);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(201);
+      expect(resJson).toHaveBeenCalledWith({
         id: 'new-user-id',
         email: 'new@example.com',
         name: 'New User',
@@ -95,7 +102,7 @@ describe('Auth Controller', () => {
 
     it('should return 400 if user already exists', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         email: 'existing@example.com',
         password: 'password123',
         name: 'Existing User'
@@ -108,17 +115,14 @@ describe('Auth Controller', () => {
       });
 
       // Act
-      await authController.register(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.register(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
         where: { email: 'existing@example.com' }
       });
-      expect(mockResponse.status).toHaveBeenCalledWith(400);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(400);
+      expect(resJson).toHaveBeenCalledWith({
         error: 'User already exists'
       });
       expect(bcrypt.genSalt).not.toHaveBeenCalled();
@@ -127,7 +131,7 @@ describe('Auth Controller', () => {
 
     it('should handle errors during registration', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         email: 'new@example.com',
         password: 'password123',
         name: 'New User'
@@ -141,14 +145,11 @@ describe('Auth Controller', () => {
       jest.spyOn(console, 'error').mockImplementation(() => {});
 
       // Act
-      await authController.register(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.register(req as Request, res as Response);
 
       // Assert
-      expect(mockResponse.status).toHaveBeenCalledWith(500);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(500);
+      expect(resJson).toHaveBeenCalledWith({
         error: 'Something went wrong'
       });
       expect(console.error).toHaveBeenCalled();
@@ -158,7 +159,7 @@ describe('Auth Controller', () => {
   describe('login', () => {
     it('should login a user successfully', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         email: 'user@example.com',
         password: 'password123'
       };
@@ -180,10 +181,7 @@ describe('Auth Controller', () => {
       (jwt.sign as jest.Mock).mockReturnValue('jwt-token');
 
       // Act
-      await authController.login(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.login(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
@@ -191,8 +189,8 @@ describe('Auth Controller', () => {
       });
       expect(bcrypt.compare).toHaveBeenCalledWith('password123', 'hashed-password');
       expect(jwt.sign).toHaveBeenCalled();
-      expect(mockResponse.status).toHaveBeenCalledWith(200);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(200);
+      expect(resJson).toHaveBeenCalledWith({
         id: 'user-id',
         email: 'user@example.com',
         name: 'Test User',
@@ -202,7 +200,7 @@ describe('Auth Controller', () => {
 
     it('should return 404 if user not found', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         email: 'nonexistent@example.com',
         password: 'password123'
       };
@@ -211,17 +209,14 @@ describe('Auth Controller', () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
       // Act
-      await authController.login(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.login(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
         where: { email: 'nonexistent@example.com' }
       });
-      expect(mockResponse.status).toHaveBeenCalledWith(404);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(404);
+      expect(resJson).toHaveBeenCalledWith({
         error: 'User not found'
       });
       expect(bcrypt.compare).not.toHaveBeenCalled();
@@ -229,7 +224,7 @@ describe('Auth Controller', () => {
 
     it('should return 401 if password is invalid', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         email: 'user@example.com',
         password: 'wrong-password'
       };
@@ -248,18 +243,15 @@ describe('Auth Controller', () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       // Act
-      await authController.login(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.login(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
         where: { email: 'user@example.com' }
       });
       expect(bcrypt.compare).toHaveBeenCalledWith('wrong-password', 'hashed-password');
-      expect(mockResponse.status).toHaveBeenCalledWith(401);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(401);
+      expect(resJson).toHaveBeenCalledWith({
         error: 'Invalid credentials'
       });
       expect(jwt.sign).not.toHaveBeenCalled();
@@ -267,7 +259,7 @@ describe('Auth Controller', () => {
 
     it('should handle 2FA if enabled', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         email: 'user@example.com',
         password: 'password123'
       };
@@ -286,18 +278,15 @@ describe('Auth Controller', () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       // Act
-      await authController.login(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.login(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
         where: { email: 'user@example.com' }
       });
       expect(bcrypt.compare).toHaveBeenCalledWith('password123', 'hashed-password');
-      expect(mockResponse.status).toHaveBeenCalledWith(200);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(200);
+      expect(resJson).toHaveBeenCalledWith({
         requireTwoFactor: true,
         userId: 'user-id'
       });
@@ -308,7 +297,7 @@ describe('Auth Controller', () => {
   describe('forgotPassword', () => {
     it('should process forgot password request for existing user', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         email: 'user@example.com'
       };
 
@@ -339,10 +328,7 @@ describe('Auth Controller', () => {
       (emailUtils.sendPasswordResetEmail as jest.Mock).mockResolvedValue(true);
 
       // Act
-      await authController.forgotPassword(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.forgotPassword(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
@@ -356,15 +342,15 @@ describe('Auth Controller', () => {
         'reset-token',
         'Test User'
       );
-      expect(mockResponse.status).toHaveBeenCalledWith(200);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(200);
+      expect(resJson).toHaveBeenCalledWith({
         message: 'If your email is registered, you will receive a password reset link'
       });
     });
 
     it('should return generic message for non-existent user', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         email: 'nonexistent@example.com'
       };
 
@@ -372,17 +358,14 @@ describe('Auth Controller', () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
       // Act
-      await authController.forgotPassword(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.forgotPassword(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
         where: { email: 'nonexistent@example.com' }
       });
-      expect(mockResponse.status).toHaveBeenCalledWith(200);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(200);
+      expect(resJson).toHaveBeenCalledWith({
         message: 'If your email is registered, you will receive a password reset link'
       });
       expect(tokenUtils.generateToken).not.toHaveBeenCalled();
@@ -392,7 +375,7 @@ describe('Auth Controller', () => {
 
     it('should handle rate limiting', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         email: 'user@example.com'
       };
 
@@ -407,18 +390,15 @@ describe('Auth Controller', () => {
       (tokenUtils.checkResetRateLimit as jest.Mock).mockReturnValue(true);
 
       // Act
-      await authController.forgotPassword(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.forgotPassword(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
         where: { email: 'user@example.com' }
       });
       expect(tokenUtils.checkResetRateLimit).toHaveBeenCalledWith('user@example.com');
-      expect(mockResponse.status).toHaveBeenCalledWith(429);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(429);
+      expect(resJson).toHaveBeenCalledWith({
         error: 'Too many reset attempts. Please try again later.'
       });
       expect(tokenUtils.generateToken).not.toHaveBeenCalled();
@@ -429,7 +409,7 @@ describe('Auth Controller', () => {
   describe('resetPassword', () => {
     it('should reset password with valid token', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         token: 'valid-token',
         password: 'new-password'
       };
@@ -470,10 +450,7 @@ describe('Auth Controller', () => {
       (emailUtils.sendPasswordChangedEmail as jest.Mock).mockResolvedValue(true);
 
       // Act
-      await authController.resetPassword(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.resetPassword(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.passwordResetToken.findUnique).toHaveBeenCalledWith({
@@ -495,15 +472,15 @@ describe('Auth Controller', () => {
         'user@example.com',
         'Test User'
       );
-      expect(mockResponse.status).toHaveBeenCalledWith(200);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(200);
+      expect(resJson).toHaveBeenCalledWith({
         message: 'Password has been reset successfully'
       });
     });
 
     it('should return 400 if token is invalid', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         token: 'invalid-token',
         password: 'new-password'
       };
@@ -512,18 +489,15 @@ describe('Auth Controller', () => {
       mockPrisma.passwordResetToken.findUnique.mockResolvedValue(null);
 
       // Act
-      await authController.resetPassword(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.resetPassword(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.passwordResetToken.findUnique).toHaveBeenCalledWith({
         where: { token: 'invalid-token' },
         include: { user: true }
       });
-      expect(mockResponse.status).toHaveBeenCalledWith(400);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(400);
+      expect(resJson).toHaveBeenCalledWith({
         error: 'Invalid or expired token'
       });
       expect(bcrypt.genSalt).not.toHaveBeenCalled();
@@ -532,7 +506,7 @@ describe('Auth Controller', () => {
 
     it('should return 400 if token is already used', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         token: 'used-token',
         password: 'new-password'
       };
@@ -552,18 +526,15 @@ describe('Auth Controller', () => {
       });
 
       // Act
-      await authController.resetPassword(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.resetPassword(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.passwordResetToken.findUnique).toHaveBeenCalledWith({
         where: { token: 'used-token' },
         include: { user: true }
       });
-      expect(mockResponse.status).toHaveBeenCalledWith(400);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(400);
+      expect(resJson).toHaveBeenCalledWith({
         error: 'Token has already been used'
       });
       expect(bcrypt.genSalt).not.toHaveBeenCalled();
@@ -572,7 +543,7 @@ describe('Auth Controller', () => {
 
     it('should return 400 if token is expired', async () => {
       // Arrange
-      mockRequest.body = {
+      req.body = {
         token: 'expired-token',
         password: 'new-password'
       };
@@ -595,10 +566,7 @@ describe('Auth Controller', () => {
       (tokenUtils.isTokenExpired as jest.Mock).mockReturnValue(true);
 
       // Act
-      await authController.resetPassword(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.resetPassword(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.passwordResetToken.findUnique).toHaveBeenCalledWith({
@@ -606,8 +574,8 @@ describe('Auth Controller', () => {
         include: { user: true }
       });
       expect(tokenUtils.isTokenExpired).toHaveBeenCalled();
-      expect(mockResponse.status).toHaveBeenCalledWith(400);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(400);
+      expect(resJson).toHaveBeenCalledWith({
         error: 'Token has expired'
       });
       expect(bcrypt.genSalt).not.toHaveBeenCalled();
@@ -618,14 +586,11 @@ describe('Auth Controller', () => {
   describe('logout', () => {
     it('should handle logout successfully', async () => {
       // Act
-      await authController.logout(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.logout(req as Request, res as Response);
 
       // Assert
-      expect(mockResponse.status).toHaveBeenCalledWith(200);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(200);
+      expect(resJson).toHaveBeenCalledWith({
         message: 'Logged out successfully'
       });
     });
@@ -645,10 +610,7 @@ describe('Auth Controller', () => {
       });
 
       // Act
-      await authController.getMe(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.getMe(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
@@ -663,23 +625,20 @@ describe('Auth Controller', () => {
           updatedAt: true
         }
       });
-      expect(mockResponse.status).toHaveBeenCalledWith(200);
-      expect(mockResponse.json).toHaveBeenCalled();
+      expect(resStatus).toHaveBeenCalledWith(200);
+      expect(resJson).toHaveBeenCalled();
     });
 
     it('should return 401 if user is not authenticated', async () => {
       // Arrange - user not authenticated
-      mockRequest.user = undefined;
+      req.user = undefined;
 
       // Act
-      await authController.getMe(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.getMe(req as Request, res as Response);
 
       // Assert
-      expect(mockResponse.status).toHaveBeenCalledWith(401);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(401);
+      expect(resJson).toHaveBeenCalledWith({
         error: 'Not authenticated'
       });
       expect(mockPrisma.user.findUnique).not.toHaveBeenCalled();
@@ -690,18 +649,15 @@ describe('Auth Controller', () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
       // Act
-      await authController.getMe(
-        mockRequest as Request,
-        mockResponse as Response
-      );
+      await authController.getMe(req as Request, res as Response);
 
       // Assert
       expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
         where: { id: 'user-id' },
         select: expect.any(Object)
       });
-      expect(mockResponse.status).toHaveBeenCalledWith(404);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(404);
+      expect(resJson).toHaveBeenCalledWith({
         error: 'User not found'
       });
     });

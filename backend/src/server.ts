@@ -56,15 +56,64 @@ app.get("/health", (req, res) => {
 
 // Import routes
 import authRoutes from "./routes/auth.routes";
+import personRoutes from "./routes/person.routes";
+import interactionRoutes from "./routes/interaction.routes";
+import tagRoutes from "./routes/tag.routes";
 
 // Register routes
 app.use("/api/auth", authRoutes);
 console.log("Auth routes registered");
 
-// Add error handler
+app.use("/api/people", personRoutes);
+console.log("Person routes registered");
+
+app.use("/api/interactions", interactionRoutes);
+console.log("Interaction routes registered");
+
+app.use("/api/tags", tagRoutes);
+console.log("Tag routes registered");
+
+// Add error handler with detailed logging
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error("Server error:", err.stack);
-  res.status(500).json({ error: "Something went wrong!" });
+  // Log detailed error information
+  console.error("=== SERVER ERROR ===");
+  console.error(`Request URL: ${req.method} ${req.originalUrl}`);
+  console.error(`Request body:`, req.body);
+  console.error(`Request headers:`, req.headers);
+  console.error(`Error message: ${err.message}`);
+  console.error(`Error stack: ${err.stack}`);
+  console.error(`Error type: ${err.constructor.name}`);
+  console.error(`Error is instance of Error: ${err instanceof Error}`);
+  console.error(`Error properties:`, Object.keys(err));
+  
+  // Check for specific error types
+  if (err.name === 'PrismaClientKnownRequestError') {
+    console.error(`Prisma error code: ${err.code}`);
+  }
+  
+  // Try to identify the source of the error
+  const stack = err.stack || '';
+  if (stack.includes('person.service')) {
+    console.error('Error originated in person.service');
+  } else if (stack.includes('person.controller')) {
+    console.error('Error originated in person.controller');
+  } else if (stack.includes('prisma')) {
+    console.error('Error originated in prisma');
+  }
+  
+  // Send a more informative error response in development
+  if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+    res.status(500).json({ 
+      error: "Server error", 
+      message: err.message,
+      stack: err.stack,
+      path: req.originalUrl,
+      type: err.constructor.name
+    });
+  } else {
+    // In production, don't expose error details
+    res.status(500).json({ error: "Something went wrong!" });
+  }
 });
 
 const PORT = process.env.PORT || 3001;

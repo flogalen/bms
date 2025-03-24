@@ -18,6 +18,10 @@ model User {
   twoFactorSecret   String?   // For 2FA
   role              Role      @default(USER)
   passwordResetTokens PasswordResetToken[]
+  
+  // People Module Relations
+  createdPersons    Person[]          @relation("PersonCreator")
+  createdInteractions InteractionLog[] @relation("InteractionCreator")
 }
 
 enum Role {
@@ -33,6 +37,112 @@ model PasswordResetToken {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId      String
   used        Boolean   @default(false)
+}
+
+// People Module
+
+model Person {
+  id            String          @id @default(uuid())
+  name          String
+  email         String?
+  phone         String?
+  role          String?
+  status        PersonStatus    @default(ACTIVE)
+  notes         String?
+  address       String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  createdBy     User?           @relation("PersonCreator", fields: [createdById], references: [id])
+  createdById   String?
+  
+  // Relations
+  dynamicFields DynamicField[]
+  interactions  InteractionLog[]
+}
+
+enum PersonStatus {
+  ACTIVE
+  INACTIVE
+  LEAD
+  CUSTOMER
+  VENDOR
+  PARTNER
+}
+
+model DynamicField {
+  id            String    @id @default(uuid())
+  fieldName     String
+  fieldType     FieldType
+  stringValue   String?
+  numberValue   Float?
+  booleanValue  Boolean?
+  dateValue     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  person        Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  personId      String
+}
+
+enum FieldType {
+  STRING
+  NUMBER
+  BOOLEAN
+  DATE
+  URL
+  EMAIL
+  PHONE
+}
+
+model Tag {
+  id            String            @id @default(uuid())
+  name          String            @unique
+  color         String?           // Optional color for UI display
+  description   String?           // Optional description
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  
+  // Relations
+  interactions  InteractionTag[]
+}
+
+model InteractionLog {
+  id            String            @id @default(uuid())
+  type          InteractionType
+  notes         String?
+  date          DateTime          @default(now())
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  
+  // Relations
+  person        Person            @relation(fields: [personId], references: [id], onDelete: Cascade)
+  personId      String
+  createdBy     User?             @relation("InteractionCreator", fields: [createdById], references: [id])
+  createdById   String?
+  tagRelations  InteractionTag[]
+}
+
+// Junction table for many-to-many relationship between InteractionLog and Tag
+model InteractionTag {
+  interaction   InteractionLog    @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+  interactionId String
+  tag           Tag               @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tagId         String
+  assignedAt    DateTime          @default(now())
+
+  @@id([interactionId, tagId])
+  @@index([tagId])
+  @@index([interactionId])
+}
+
+enum InteractionType {
+  CALL
+  EMAIL
+  MEETING
+  NOTE
+  TASK
+  OTHER
 }
 
 // Will expand with other models as we progress through sprints

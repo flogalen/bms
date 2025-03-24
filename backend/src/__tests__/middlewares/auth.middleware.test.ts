@@ -1,36 +1,53 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { authenticateJWT, isAdmin } from '../../middlewares/auth.middleware';
+import { mockPrisma, setupPrismaMock } from '../mocks/prisma.mock';
 
 // Mock dependencies
 jest.mock('jsonwebtoken');
 
+// Initialize Prisma mock
+setupPrismaMock();
+
 describe('Auth Middleware', () => {
-  let mockRequest: Partial<Request>;
-  let mockResponse: Partial<Response>;
-  let nextFunction: NextFunction;
+  // Set a higher timeout for all tests in this suite
+  jest.setTimeout(30000);
+
+  // Mock request and response objects
+  let req: Partial<Request>;
+  let res: Partial<Response>;
+  let resJson: jest.Mock;
+  let resStatus: jest.Mock;
+  let next: NextFunction;
 
   beforeEach(() => {
-    // Reset mocks
+    // Reset Prisma mock for each test
+    setupPrismaMock();
+    
+    // Clear other mock history but preserve implementations
     jest.clearAllMocks();
-
-    // Mock request and response
-    mockRequest = {
+    
+    // Set up mock request and response objects
+    resJson = jest.fn().mockReturnThis();
+    resStatus = jest.fn().mockReturnValue({ json: resJson });
+    
+    req = {
       headers: {
         authorization: 'Bearer valid-token'
       }
     };
-
-    mockResponse = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn().mockReturnThis()
+    
+    res = {
+      status: resStatus,
+      json: resJson
     };
-
-    nextFunction = jest.fn();
+    
+    next = jest.fn();
   });
 
   describe('authenticateJWT', () => {
     it('should authenticate valid JWT token', () => {
+      // Arrange
       // Mock JWT verification
       (jwt.verify as jest.Mock).mockReturnValue({
         id: 'user-id',
@@ -38,122 +55,103 @@ describe('Auth Middleware', () => {
         role: 'USER'
       });
 
-      // Call the middleware
-      authenticateJWT(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction
-      );
+      // Act
+      authenticateJWT(req as Request, res as Response, next);
 
       // Assert
       expect(jwt.verify).toHaveBeenCalledWith('valid-token', expect.any(String));
-      expect(mockRequest.user).toEqual({
+      expect(req.user).toEqual({
         id: 'user-id',
         email: 'test@example.com',
         role: 'USER'
       });
-      expect(nextFunction).toHaveBeenCalled();
-      expect(mockResponse.status).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalled();
+      expect(resStatus).not.toHaveBeenCalled();
     });
 
     it('should return 401 if no token provided', () => {
+      // Arrange
       // Mock request without token
-      mockRequest.headers = {};
+      req.headers = {};
 
-      // Call the middleware
-      authenticateJWT(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction
-      );
+      // Act
+      authenticateJWT(req as Request, res as Response, next);
 
       // Assert
-      expect(mockResponse.status).toHaveBeenCalledWith(401);
-      expect(mockResponse.json).toHaveBeenCalledWith({ error: 'No token provided' });
-      expect(nextFunction).not.toHaveBeenCalled();
+      expect(resStatus).toHaveBeenCalledWith(401);
+      expect(resJson).toHaveBeenCalledWith({ error: 'No token provided' });
+      expect(next).not.toHaveBeenCalled();
     });
 
     it('should return 401 if token format is invalid', () => {
+      // Arrange
       // Mock request with invalid token format
-      mockRequest.headers = {
+      req.headers = {
         authorization: 'InvalidToken'
       };
 
-      // Call the middleware
-      authenticateJWT(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction
-      );
+      // Act
+      authenticateJWT(req as Request, res as Response, next);
 
       // Assert
-      expect(mockResponse.status).toHaveBeenCalledWith(401);
-      expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Token error' });
-      expect(nextFunction).not.toHaveBeenCalled();
+      expect(resStatus).toHaveBeenCalledWith(401);
+      expect(resJson).toHaveBeenCalledWith({ error: 'Token error' });
+      expect(next).not.toHaveBeenCalled();
     });
 
     it('should return 401 if token verification fails', () => {
+      // Arrange
       // Mock JWT verification failure
       (jwt.verify as jest.Mock).mockImplementation(() => {
         throw new Error('Invalid token');
       });
 
-      // Call the middleware
-      authenticateJWT(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction
-      );
+      // Act
+      authenticateJWT(req as Request, res as Response, next);
 
       // Assert
-      expect(mockResponse.status).toHaveBeenCalledWith(401);
-      expect(mockResponse.json).toHaveBeenCalledWith({ error: 'Invalid token' });
-      expect(nextFunction).not.toHaveBeenCalled();
+      expect(resStatus).toHaveBeenCalledWith(401);
+      expect(resJson).toHaveBeenCalledWith({ error: 'Invalid token' });
+      expect(next).not.toHaveBeenCalled();
     });
   });
 
   describe('isAdmin', () => {
     it('should allow admin users', () => {
+      // Arrange
       // Mock admin user
-      mockRequest.user = {
+      req.user = {
         id: 'admin-id',
         email: 'admin@example.com',
         role: 'ADMIN'
       };
 
-      // Call the middleware
-      isAdmin(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction
-      );
+      // Act
+      isAdmin(req as Request, res as Response, next);
 
       // Assert
-      expect(nextFunction).toHaveBeenCalled();
-      expect(mockResponse.status).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalled();
+      expect(resStatus).not.toHaveBeenCalled();
     });
 
     it('should return 403 for non-admin users', () => {
+      // Arrange
       // Mock regular user
-      mockRequest.user = {
+      req.user = {
         id: 'user-id',
         email: 'user@example.com',
         role: 'USER'
       };
 
-      // Call the middleware
-      isAdmin(
-        mockRequest as Request,
-        mockResponse as Response,
-        nextFunction
-      );
+      // Act
+      isAdmin(req as Request, res as Response, next);
 
       // Assert
-      expect(mockResponse.status).toHaveBeenCalledWith(403);
-      expect(mockResponse.json).toHaveBeenCalledWith({
+      expect(resStatus).toHaveBeenCalledWith(403);
+      expect(resJson).toHaveBeenCalledWith({
         error: 'Access denied. Admin role required.'
       });
-      expect(nextFunction).not.toHaveBeenCalled();
+      expect(next).not.toHaveBeenCalled();
     });
   });
 });
