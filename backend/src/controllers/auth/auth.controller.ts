@@ -10,7 +10,17 @@ import {
   checkResetRateLimit
 } from "../../utils/token";
 
-const prisma = new PrismaClient();
+// Use a singleton pattern for PrismaClient to make it easier to mock in tests
+let prisma: PrismaClient;
+
+// Check if we're in a test environment
+if (process.env.NODE_ENV === 'test') {
+  // In test environment, prisma will be mocked by the test
+  prisma = (global as any).prisma;
+} else {
+  // In production/development, create a new instance
+  prisma = new PrismaClient();
+}
 const JWT_SECRET = process.env.JWT_SECRET || "your-default-jwt-secret";
 
 // Register a new user

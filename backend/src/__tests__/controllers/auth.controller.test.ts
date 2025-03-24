@@ -5,7 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import * as authController from '../../controllers/auth/auth.controller';
 import * as emailUtils from '../../utils/email';
 import * as tokenUtils from '../../utils/token';
-import { mockPrismaClient, setupPrismaMock } from '../../mocks/prisma.mock';
+import { mockPrisma, setupPrismaMock } from '../mocks/prisma.mock';
 
 // Mock dependencies
 jest.mock('bcrypt');

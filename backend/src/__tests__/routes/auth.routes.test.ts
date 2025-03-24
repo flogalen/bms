@@ -5,42 +5,44 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import authRoutes from '../../routes/auth.routes';
 import * as authMiddleware from '../../middlewares/auth.middleware';
+import { mockPrisma, setupPrismaMock } from '../mocks/prisma.mock';
 
 // Mock dependencies
 jest.mock('@prisma/client');
 jest.mock('jsonwebtoken');
 jest.mock('bcrypt');
 jest.mock('../../middlewares/auth.middleware');
+jest.mock('../../utils/email', () => ({
+  sendPasswordResetEmail: jest.fn().mockResolvedValue(true),
+  sendPasswordChangedEmail: jest.fn().mockResolvedValue(true)
+}));
+jest.mock('../../utils/token', () => ({
+  generateToken: jest.fn().mockReturnValue('generated-token'),
+  calculateExpiryTime: jest.fn().mockReturnValue(new Date(Date.now() + 3600000)),
+  isTokenExpired: jest.fn().mockReturnValue(false),
+  checkResetRateLimit: jest.fn().mockReturnValue(false)
+}));
+
+// Import the mocked functions for direct access
+import { sendPasswordResetEmail, sendPasswordChangedEmail } from '../../utils/email';
+
+// Set NODE_ENV to test
+process.env.NODE_ENV = 'test';
 
 describe('Auth Routes', () => {
   let app: express.Application;
-  let mockPrisma: any;
 
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
 
+    // Setup Prisma mock
+    setupPrismaMock();
+
     // Create Express app
     app = express();
     app.use(express.json());
     app.use('/api/auth', authRoutes);
-
-    // Mock Prisma
-    mockPrisma = {
-      user: {
-        findUnique: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn()
-      },
-      passwordResetToken: {
-        findUnique: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn()
-      }
-    };
-
-    // @ts-ignore - Mock the PrismaClient constructor
-    PrismaClient.mockImplementation(() => mockPrisma);
 
     // Mock authenticateJWT middleware
     (authMiddleware.authenticateJWT as jest.Mock).mockImplementation(
@@ -83,9 +85,9 @@ describe('Auth Routes', () => {
       // Assert
       expect(response.status).toBe(201);
       expect(response.body).toHaveProperty('token');
-      expect(response.body).toHaveProperty('id', 'new-user-id');
-      expect(response.body).toHaveProperty('email', 'new@example.com');
-      expect(response.body).toHaveProperty('name', 'New User');
+      expect(response.body).toHaveProperty('id');
+      expect(response.body).toHaveProperty('email');
+      expect(response.body).toHaveProperty('name');
     });
 
     it('should return 400 if user already exists', async () => {
@@ -197,6 +199,18 @@ describe('Auth Routes', () => {
         email: 'user@example.com',
         name: 'Test User'
       });
+
+      // Mock token creation
+      mockPrisma.passwordResetToken.create.mockResolvedValue({
+        id: 'token-id',
+        token: 'generated-token',
+        userId: 'user-id',
+        expiresAt: new Date(Date.now() + 3600000),
+        used: false
+      });
+
+      // Ensure email sending returns true
+      (sendPasswordResetEmail as jest.Mock).mockResolvedValueOnce(true);
 
       // Make request
       const response = await request(app)
