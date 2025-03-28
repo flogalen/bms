@@ -29,10 +29,15 @@ export const isTokenExpired = (expiryTime: Date): boolean => {
 
 /**
  * Implement rate limiting for password reset requests
- * This is a simple in-memory implementation
- * In production, you would use Redis or a similar solution
+ * 
+ * !!! WARNING: THIS IS A SIMPLE IN-MEMORY IMPLEMENTATION AND IS NOT SUITABLE FOR PRODUCTION !!!
+ * - Data is lost on server restart.
+ * - Does not scale across multiple server instances.
+ * - Potentially vulnerable to memory exhaustion under attack.
+ * 
+ * Replace this with a persistent solution like Redis or a database-backed approach for production environments.
  */
-const resetAttempts = new Map<string, { count: number; lastAttempt: Date }>();
+const resetAttempts = new Map<string, { count: number; lastAttempt: Date }>(); // <<< NOT FOR PRODUCTION
 
 /**
  * Check if a user has exceeded the rate limit for password reset requests

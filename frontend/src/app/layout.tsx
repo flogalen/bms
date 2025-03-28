@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { Inter as FontSans } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { AuthProvider } from "@/providers/auth-provider";
+import { ThemeProvider } from "next-themes"; // Import ThemeProvider
+import { Toaster } from "@/components/ui/sonner"; // Import Toaster
 
 const fontSans = FontSans({
   subsets: ["latin"],
@@ -25,11 +27,18 @@ export default function RootLayout({
         className={cn(
           "min-h-screen bg-background font-sans antialiased",
           fontSans.variable
-        )}
-      >
-        <AuthProvider>{children}</AuthProvider>
-      </body>
-    </html>
+         )}
+       >
+         <ThemeProvider
+           attribute="class"
+           defaultTheme="system"
+           enableSystem
+           disableTransitionOnChange
+         >
+           <AuthProvider>{children}</AuthProvider>
+           <Toaster /> {/* Add Toaster component */}
+         </ThemeProvider>
+       </body>
+     </html>
   );
 }
-

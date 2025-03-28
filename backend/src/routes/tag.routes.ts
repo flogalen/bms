@@ -16,6 +16,7 @@ router.use(authenticateJWT);
 // Tag routes
 router.post('/', tagController.createTag);
 router.get('/', tagController.getTags);
+router.get('/top', tagController.getTopTags); // Get top tags by usage
 router.get('/:id', tagController.getTagById);
 router.put('/:id', tagController.updateTag);
 router.delete('/:id', tagController.deleteTag);

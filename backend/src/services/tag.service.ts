@@ -5,8 +5,8 @@
  * It enables creating, updating, and managing tags for interactions.
  */
 
-import { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
+import prisma from "../prisma";
 
 export interface Tag {
   id: string;
@@ -15,26 +15,6 @@ export interface Tag {
   description?: string | null;
   createdAt: Date;
   updatedAt: Date;
-}
-
-// Define a type that extends PrismaClient with our models
-// This is a workaround until the Prisma client is regenerated
-interface ExtendedPrismaClient extends PrismaClient {
-  tag: any;
-  interactionTag: any;
-  interactionLog: any;
-}
-
-// Use a singleton pattern for PrismaClient to make it easier to mock in tests
-let prisma: ExtendedPrismaClient;
-
-// Check if we're in a test environment
-if (process.env.NODE_ENV === 'test') {
-  // In test environment, prisma will be mocked by the test
-  prisma = (global as any).prisma as ExtendedPrismaClient;
-} else {
-  // In production/development, create a new instance
-  prisma = new PrismaClient() as ExtendedPrismaClient;
 }
 
 // Define interfaces for our service methods
@@ -214,7 +194,7 @@ export class TagService {
   /**
    * Associate tags with an interaction
    */
-  async associateTagsWithInteraction(interactionId: string, tagIds: string[]): Promise<void> {
+  async associateTagsWithInteraction(interactionId: string, tagIds: string[], userId?: string): Promise<void> {
     try {
       // Check if interaction exists
       const interaction = await prisma.interactionLog.findUnique({
@@ -223,6 +203,11 @@ export class TagService {
 
       if (!interaction) {
         throw new Error(`Interaction with ID ${interactionId} not found`);
+      }
+
+      // Authorization check: Ensure the user owns the interaction record
+      if (!userId || interaction.createdById !== userId) {
+        throw new Error("Unauthorized: You do not have permission to modify tags for this interaction.");
       }
 
       // Create the associations
@@ -244,7 +229,7 @@ export class TagService {
   /**
    * Remove tag associations from an interaction
    */
-  async removeTagsFromInteraction(interactionId: string, tagIds: string[]): Promise<void> {
+  async removeTagsFromInteraction(interactionId: string, tagIds: string[], userId?: string): Promise<void> {
     try {
       // Check if interaction exists
       const interaction = await prisma.interactionLog.findUnique({
@@ -253,6 +238,11 @@ export class TagService {
 
       if (!interaction) {
         throw new Error(`Interaction with ID ${interactionId} not found`);
+      }
+
+      // Authorization check: Ensure the user owns the interaction record
+      if (!userId || interaction.createdById !== userId) {
+        throw new Error("Unauthorized: You do not have permission to modify tags for this interaction.");
       }
 
       // Delete the associations
@@ -292,6 +282,48 @@ export class TagService {
       return tagRelations.map((relation: { tag: Tag }) => relation.tag);
     } catch (error) {
       this.handleError(error as Error, "Error fetching tags for interaction");
+    }
+  }
+
+  /**
+   * Get the most frequently used tags
+   */
+  async getTopTags(limit: number = 5): Promise<Tag[]> {
+    try {
+      // Get tags with their usage count
+      const tagCounts = await prisma.interactionTag.groupBy({
+        by: ['tagId'],
+        _count: {
+          tagId: true
+        }
+      });
+
+      // Sort by count in descending order and take the top 'limit' tags
+      const topTagIds = tagCounts
+        .sort((a, b) => b._count.tagId - a._count.tagId)
+        .slice(0, limit)
+        .map(tag => tag.tagId);
+
+      // If no tags have been used yet, return an empty array
+      if (topTagIds.length === 0) {
+        return [];
+      }
+
+      // Fetch the actual tag objects
+      const topTags = await prisma.tag.findMany({
+        where: {
+          id: {
+            in: topTagIds
+          }
+        }
+      });
+
+      // Sort the tags in the same order as topTagIds
+      return topTagIds.map(id => 
+        topTags.find(tag => tag.id === id)
+      ).filter(tag => tag !== undefined) as Tag[];
+    } catch (error) {
+      this.handleError(error as Error, "Error fetching top tags");
     }
   }
 

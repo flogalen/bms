@@ -11,7 +11,7 @@ export class TagController {
   /**
    * Create a new tag
    */
-  async createTag(req: Request, res: Response): Promise<void> {
+  async createTag(req: Request, res: Response, next: Function): Promise<void> {
     try {
       const { name, color, description } = req.body;
       
@@ -26,18 +26,15 @@ export class TagController {
         data: tag
       });
     } catch (error) {
-      console.error('Error creating tag:', error);
-      res.status(400).json({
-        success: false,
-        message: (error as Error).message || 'Failed to create tag'
-      });
+      // Pass error to global handler
+      next(error);
     }
   }
 
   /**
    * Get a tag by ID
    */
-  async getTagById(req: Request, res: Response): Promise<void> {
+  async getTagById(req: Request, res: Response, next: Function): Promise<void> {
     try {
       const { id } = req.params;
       const tag = await tagService.getTagById(id);
@@ -55,21 +52,18 @@ export class TagController {
         data: tag
       });
     } catch (error) {
-      console.error('Error fetching tag:', error);
-      res.status(500).json({
-        success: false,
-        message: (error as Error).message || 'Failed to fetch tag'
-      });
+      // Pass error to global handler
+      next(error);
     }
   }
 
   /**
    * Get all tags with optional filtering
    */
-  async getTags(req: Request, res: Response): Promise<void> {
+  async getTags(req: Request, res: Response, next: Function): Promise<void> {
     try {
       // Parse query parameters
-      const { 
+      const {
         search,
         page = '1', 
         limit = '50' 
@@ -101,21 +95,19 @@ export class TagController {
         }
       });
     } catch (error) {
-      console.error('Error fetching tags:', error);
-      res.status(500).json({
-        success: false,
-        message: (error as Error).message || 'Failed to fetch tags'
-      });
+      // Pass error to global handler
+      next(error);
     }
   }
 
   /**
    * Update a tag
    */
-  async updateTag(req: Request, res: Response): Promise<void> {
+  async updateTag(req: Request, res: Response, next: Function): Promise<void> {
     try {
       const { id } = req.params;
       const { name, color, description } = req.body;
+      // Assuming tags are global, no userId check needed here. If tags were user-specific, add auth check.
 
       const updateData: any = {};
       
@@ -130,36 +122,31 @@ export class TagController {
         data: tag
       });
     } catch (error) {
-      console.error('Error updating tag:', error);
-      res.status(400).json({
-        success: false,
-        message: (error as Error).message || 'Failed to update tag'
-      });
+      // Pass error to global handler
+      next(error);
     }
   }
 
   /**
    * Delete a tag
    */
-  async deleteTag(req: Request, res: Response): Promise<void> {
+  async deleteTag(req: Request, res: Response, next: Function): Promise<void> {
     try {
       const { id } = req.params;
+      // Assuming tags are global, no userId check needed here. If tags were user-specific, add auth check.
       const result = await tagService.deleteTag(id);
 
       res.status(200).json(result);
     } catch (error) {
-      console.error('Error deleting tag:', error);
-      res.status(400).json({
-        success: false,
-        message: (error as Error).message || 'Failed to delete tag'
-      });
+      // Pass error to global handler
+      next(error);
     }
   }
 
   /**
    * Get all tags for an interaction
    */
-  async getTagsForInteraction(req: Request, res: Response): Promise<void> {
+  async getTagsForInteraction(req: Request, res: Response, next: Function): Promise<void> {
     try {
       const { interactionId } = req.params;
       const tags = await tagService.getTagsForInteraction(interactionId);
@@ -169,21 +156,18 @@ export class TagController {
         data: tags
       });
     } catch (error) {
-      console.error('Error fetching tags for interaction:', error);
-      res.status(500).json({
-        success: false,
-        message: (error as Error).message || 'Failed to fetch tags for interaction'
-      });
+      // Pass error to global handler
+      next(error);
     }
   }
 
   /**
    * Get all interactions for a tag
    */
-  async getInteractionsForTag(req: Request, res: Response): Promise<void> {
+  async getInteractionsForTag(req: Request, res: Response, next: Function): Promise<void> {
     try {
       const { tagId } = req.params;
-      const { 
+      const {
         page = '1', 
         limit = '10' 
       } = req.query;
@@ -207,21 +191,19 @@ export class TagController {
         }
       });
     } catch (error) {
-      console.error('Error fetching interactions for tag:', error);
-      res.status(500).json({
-        success: false,
-        message: (error as Error).message || 'Failed to fetch interactions for tag'
-      });
+      // Pass error to global handler
+      next(error);
     }
   }
 
   /**
    * Associate tags with an interaction
    */
-  async associateTagsWithInteraction(req: Request, res: Response): Promise<void> {
+  async associateTagsWithInteraction(req: Request, res: Response, next: Function): Promise<void> {
     try {
       const { interactionId } = req.params;
       const { tagIds } = req.body;
+      const userId = req.user?.id; // Get authenticated user ID
 
       if (!Array.isArray(tagIds)) {
         res.status(400).json({
@@ -231,31 +213,30 @@ export class TagController {
         return;
       }
 
-      await tagService.associateTagsWithInteraction(interactionId, tagIds);
+      // TODO: AUTHORIZATION: Ensure tagService.associateTagsWithInteraction checks if userId is authorized to modify interaction 'interactionId'.
+      await tagService.associateTagsWithInteraction(interactionId, tagIds, userId);
 
       // Get the updated tags for the interaction
-      const tags = await tagService.getTagsForInteraction(interactionId);
+      const tags = await tagService.getTagsForInteraction(interactionId); // This likely doesn't need auth check as it's read-only
 
       res.status(200).json({
         success: true,
         data: tags
       });
     } catch (error) {
-      console.error('Error associating tags with interaction:', error);
-      res.status(400).json({
-        success: false,
-        message: (error as Error).message || 'Failed to associate tags with interaction'
-      });
+      // Pass error to global handler
+      next(error);
     }
   }
 
   /**
    * Remove tag associations from an interaction
    */
-  async removeTagsFromInteraction(req: Request, res: Response): Promise<void> {
+  async removeTagsFromInteraction(req: Request, res: Response, next: Function): Promise<void> {
     try {
       const { interactionId } = req.params;
       const { tagIds } = req.body;
+      const userId = req.user?.id; // Get authenticated user ID
 
       if (!Array.isArray(tagIds)) {
         res.status(400).json({
@@ -265,24 +246,41 @@ export class TagController {
         return;
       }
 
-      await tagService.removeTagsFromInteraction(interactionId, tagIds);
+      // TODO: AUTHORIZATION: Ensure tagService.removeTagsFromInteraction checks if userId is authorized to modify interaction 'interactionId'.
+      await tagService.removeTagsFromInteraction(interactionId, tagIds, userId);
 
       // Get the updated tags for the interaction
-      const tags = await tagService.getTagsForInteraction(interactionId);
+      const tags = await tagService.getTagsForInteraction(interactionId); // This likely doesn't need auth check as it's read-only
 
       res.status(200).json({
         success: true,
         data: tags
       });
     } catch (error) {
-      console.error('Error removing tags from interaction:', error);
-      res.status(400).json({
-        success: false,
-        message: (error as Error).message || 'Failed to remove tags from interaction'
-      });
+      // Pass error to global handler
+      next(error);
     }
   }
 
+  /**
+   * Get the most frequently used tags
+   */
+  async getTopTags(req: Request, res: Response, next: Function): Promise<void> {
+    try {
+      // Parse limit parameter, default to 5
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 5;
+      
+      const tags = await tagService.getTopTags(limit);
+
+      res.status(200).json({
+        success: true,
+        data: tags
+      });
+    } catch (error) {
+      // Pass error to global handler
+      next(error);
+    }
+  }
 }
 
 export default new TagController();

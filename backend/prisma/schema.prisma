@@ -47,6 +47,7 @@ model Person {
   email         String?
   phone         String?
   role          String?
+  company       String?         // New field for company name
   status        PersonStatus    @default(ACTIVE)
   notes         String?
   address       String?
@@ -61,12 +62,18 @@ model Person {
 }
 
 enum PersonStatus {
+  // Business contacts
   ACTIVE
   INACTIVE
   LEAD
   CUSTOMER
   VENDOR
   PARTNER
+  
+  // Personal contacts
+  FRIEND
+  FAMILY
+  ACQUAINTANCE
 }
 
 model DynamicField {

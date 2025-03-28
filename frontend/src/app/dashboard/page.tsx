@@ -86,8 +86,8 @@ export default function DashboardPage() {
             </p>
           </CardContent>
           <CardFooter className="pt-0">
-            <Button variant="outline" size="sm" className="w-full">
-              View All
+            <Button variant="outline" size="sm" className="w-full" asChild>
+              <a href="/people">View All</a>
             </Button>
           </CardFooter>
         </Card>
@@ -217,4 +217,3 @@ export default function DashboardPage() {
     </DashboardShell>
   );
 }
-

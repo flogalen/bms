@@ -118,6 +118,8 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
     error: "/login",
   },
+  // !!! SECURITY WARNING: Ensure NEXTAUTH_SECRET environment variable is set to a strong, unique secret in production!
+  // This is used to sign the NextAuth session JWT. Generate one using `openssl rand -base64 32` or similar.
   secret: process.env.NEXTAUTH_SECRET || "your-default-nextauth-secret",
 };
 

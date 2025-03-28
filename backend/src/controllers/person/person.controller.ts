@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import personService from "../../services/person.service";
-import { PersonStatus, FieldType } from "../../services/person.service";
+import { PersonStatus, FieldType } from "@prisma/client";
 
 /**
  * Get all people with optional filtering and pagination
@@ -8,12 +8,28 @@ import { PersonStatus, FieldType } from "../../services/person.service";
 export const getPeople = async (req: Request, res: Response): Promise<void> => {
   try {
     // Extract query parameters
-    const { status, search, page, limit } = req.query;
+    const { status, search, page, limit, category } = req.query;
     
     // Build filters
-    const filters: { status?: PersonStatus; search?: string } = {};
-    if (status && Object.values(PersonStatus).includes(status as PersonStatus)) {
-      filters.status = status as PersonStatus;
+    const filters: { status?: PersonStatus; search?: string; category?: 'BUSINESS' | 'PERSONAL' } = {};
+    
+    if (status) {
+      try {
+        // Check if status is a valid PersonStatus enum value
+        if (Object.values(PersonStatus).includes(status as PersonStatus)) {
+          filters.status = status as PersonStatus;
+        }
+      } catch (error) {
+        console.warn("Invalid status filter:", status);
+        // Continue without applying the status filter
+      }
+    }
+    
+    // Handle category filter
+    if (category && typeof category === 'string') {
+      if (category === 'BUSINESS' || category === 'PERSONAL') {
+        filters.category = category as 'BUSINESS' | 'PERSONAL';
+      }
     }
     
     if (search && typeof search === 'string') {
@@ -95,8 +111,10 @@ export const updatePerson = async (req: Request, res: Response): Promise<void> =
   try {
     const { id } = req.params;
     const updateData = req.body;
-    
-    const person = await personService.updatePerson(id, updateData);
+    const userId = req.user?.id; // Get authenticated user ID
+
+    // TODO: AUTHORIZATION: Ensure personService.updatePerson checks if userId is authorized to update person with 'id'.
+    const person = await personService.updatePerson(id, updateData, userId); 
     
     res.status(200).json(person);
   } catch (error) {
@@ -124,8 +142,10 @@ export const updatePerson = async (req: Request, res: Response): Promise<void> =
 export const deletePerson = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    
-    const result = await personService.deletePerson(id);
+    const userId = req.user?.id; // Get authenticated user ID
+
+    // TODO: AUTHORIZATION: Ensure personService.deletePerson checks if userId is authorized to delete person with 'id'.
+    const result = await personService.deletePerson(id, userId);
     
     res.status(200).json(result);
   } catch (error) {
@@ -148,14 +168,17 @@ export const addDynamicField = async (req: Request, res: Response): Promise<void
   try {
     const { personId } = req.params;
     const fieldData = req.body;
-    
+    const userId = req.user?.id; // Get authenticated user ID
+
+    // TODO: AUTHORIZATION: Ensure personService.addDynamicField checks if userId is authorized to modify person with 'personId'.
+
     // Validate field type
     if (!fieldData.fieldType || !Object.values(FieldType).includes(fieldData.fieldType as FieldType)) {
       res.status(400).json({ error: "Invalid field type" });
       return;
     }
     
-    const dynamicField = await personService.addDynamicField(personId, fieldData);
+    const dynamicField = await personService.addDynamicField(personId, fieldData, userId);
     
     res.status(201).json(dynamicField);
   } catch (error) {
@@ -184,8 +207,11 @@ export const addDynamicField = async (req: Request, res: Response): Promise<void
 export const removeDynamicField = async (req: Request, res: Response): Promise<void> => {
   try {
     const { fieldId } = req.params;
-    
-    const result = await personService.removeDynamicField(fieldId);
+    const userId = req.user?.id; // Get authenticated user ID
+
+    // TODO: AUTHORIZATION: Ensure personService.removeDynamicField checks if userId is authorized to remove this field 
+    // (e.g., by checking ownership of the associated person record).
+    const result = await personService.removeDynamicField(fieldId, userId);
     
     res.status(200).json(result);
   } catch (error) {

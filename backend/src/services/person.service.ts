@@ -9,28 +9,11 @@
  * This is necessary because we've added new models to the schema.
  */
 
-import { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
+import prisma from "../prisma";
 
-// Define our own interfaces to match the schema
-export enum PersonStatus {
-  ACTIVE = "ACTIVE",
-  INACTIVE = "INACTIVE",
-  LEAD = "LEAD",
-  CUSTOMER = "CUSTOMER",
-  VENDOR = "VENDOR",
-  PARTNER = "PARTNER"
-}
-
-export enum FieldType {
-  STRING = "STRING",
-  NUMBER = "NUMBER",
-  BOOLEAN = "BOOLEAN",
-  DATE = "DATE",
-  URL = "URL",
-  EMAIL = "EMAIL",
-  PHONE = "PHONE"
-}
+// Import Prisma-generated enums
+import { PersonStatus, FieldType } from "@prisma/client";
 
 export interface Person {
   id: string;
@@ -38,6 +21,7 @@ export interface Person {
   email?: string | null;
   phone?: string | null;
   role?: string | null;
+  company?: string | null;
   status: PersonStatus;
   notes?: string | null;
   address?: string | null;
@@ -46,6 +30,7 @@ export interface Person {
   createdById?: string | null;
   dynamicFields?: DynamicField[];
   interactions?: any[]; // We don't need the full type for interactions in this service
+  lastInteraction?: Date | null; // Last interaction date
 }
 
 export interface DynamicField {
@@ -61,38 +46,13 @@ export interface DynamicField {
   personId: string;
 }
 
-// Define a type that extends PrismaClient with our models
-// This is a workaround until the Prisma client is regenerated
-interface ExtendedPrismaClient extends PrismaClient {
-  person: any;
-  dynamicField: any;
-}
-
-// Use a singleton pattern for PrismaClient to make it easier to mock in tests
-let prisma: ExtendedPrismaClient;
-
-// Check if we're in a test environment
-console.log("NODE_ENV:", process.env.NODE_ENV);
-console.log("Is test environment:", process.env.NODE_ENV === 'test');
-console.log("Global prisma exists:", (global as any).prisma !== undefined);
-
-if (process.env.NODE_ENV === 'test') {
-  // In test environment, prisma will be mocked by the test
-  console.log("Using mocked prisma client");
-  prisma = (global as any).prisma as ExtendedPrismaClient;
-  console.log("Mocked prisma client set up:", prisma !== undefined);
-} else {
-  // In production/development, create a new instance
-  console.log("Using real prisma client");
-  prisma = new PrismaClient() as ExtendedPrismaClient;
-}
-
 // Define interfaces for our service methods
 export interface CreatePersonInput {
   name: string;
   email?: string;
   phone?: string;
   role?: string;
+  company?: string;
   status?: PersonStatus;
   notes?: string;
   address?: string;
@@ -105,6 +65,7 @@ export interface UpdatePersonInput {
   email?: string;
   phone?: string;
   role?: string;
+  company?: string;
   status?: PersonStatus;
   notes?: string;
   address?: string;
@@ -187,6 +148,7 @@ export class PersonService {
     filters?: {
       status?: PersonStatus;
       search?: string;
+      category?: 'BUSINESS' | 'PERSONAL';
     },
     pagination?: {
       page?: number;
@@ -205,12 +167,37 @@ export class PersonService {
         where.status = filters.status;
       }
 
+      // Handle category filter (BUSINESS or PERSONAL)
+      if (filters?.category) {
+        if (filters.category === 'BUSINESS') {
+          where.status = {
+            in: [
+              'ACTIVE',
+              'INACTIVE',
+              'LEAD',
+              'CUSTOMER',
+              'VENDOR',
+              'PARTNER'
+            ]
+          };
+        } else if (filters.category === 'PERSONAL') {
+          where.status = {
+            in: [
+              'FRIEND',
+              'FAMILY',
+              'ACQUAINTANCE'
+            ]
+          };
+        }
+      }
+
       if (filters?.search) {
         where.OR = [
           { name: { contains: filters.search, mode: 'insensitive' } },
           { email: { contains: filters.search, mode: 'insensitive' } },
           { phone: { contains: filters.search, mode: 'insensitive' } },
           { role: { contains: filters.search, mode: 'insensitive' } },
+          { company: { contains: filters.search, mode: 'insensitive' } },
           { notes: { contains: filters.search, mode: 'insensitive' } },
           { address: { contains: filters.search, mode: 'insensitive' } },
         ];
@@ -224,6 +211,12 @@ export class PersonService {
         where,
         include: {
           dynamicFields: true,
+          interactions: {
+            orderBy: {
+              date: 'desc'
+            },
+            take: 1
+          }
         },
         skip,
         take: limit,
@@ -232,7 +225,19 @@ export class PersonService {
         },
       });
 
-      return { people, total };
+      // Add last interaction date to each person
+      const peopleWithLastInteraction = people.map(person => {
+        const lastInteraction = person.interactions && person.interactions.length > 0 
+          ? person.interactions[0].date 
+          : null;
+        
+        return {
+          ...person,
+          lastInteraction
+        };
+      });
+
+      return { people: peopleWithLastInteraction, total };
     } catch (error) {
       return this.handleError(error as Error, "Error fetching people");
     }
@@ -241,7 +246,7 @@ export class PersonService {
   /**
    * Update a person
    */
-  async updatePerson(id: string, data: UpdatePersonInput): Promise<Person> {
+  async updatePerson(id: string, data: UpdatePersonInput, userId?: string): Promise<Person> {
     try {
       // Check if person exists
       const existingPerson = await prisma.person.findUnique({
@@ -251,6 +256,11 @@ export class PersonService {
 
       if (!existingPerson) {
         throw new Error(`Person with ID ${id} not found`);
+      }
+
+      // Authorization check: Ensure the user owns the record
+      if (!userId || existingPerson.createdById !== userId) {
+        throw new Error("Unauthorized: You do not have permission to update this person.");
       }
 
       // Extract dynamic fields from the input
@@ -288,7 +298,7 @@ export class PersonService {
   /**
    * Delete a person
    */
-  async deletePerson(id: string): Promise<{ success: boolean; message: string }> {
+  async deletePerson(id: string, userId?: string): Promise<{ success: boolean; message: string }> {
     try {
       // Check if person exists
       const existingPerson = await prisma.person.findUnique({
@@ -297,6 +307,11 @@ export class PersonService {
 
       if (!existingPerson) {
         throw new Error(`Person with ID ${id} not found`);
+      }
+
+      // Authorization check: Ensure the user owns the record
+      if (!userId || existingPerson.createdById !== userId) {
+        throw new Error("Unauthorized: You do not have permission to delete this person.");
       }
 
       // Delete the person (this will cascade delete related records)
@@ -313,7 +328,7 @@ export class PersonService {
   /**
    * Add a dynamic field to a person
    */
-  async addDynamicField(personId: string, field: DynamicFieldInput): Promise<DynamicField> {
+  async addDynamicField(personId: string, field: DynamicFieldInput, userId?: string): Promise<DynamicField> {
     try {
       // Check if person exists
       const existingPerson = await prisma.person.findUnique({
@@ -322,6 +337,11 @@ export class PersonService {
 
       if (!existingPerson) {
         throw new Error(`Person with ID ${personId} not found`);
+      }
+
+      // Authorization check: Ensure the user owns the person record
+      if (!userId || existingPerson.createdById !== userId) {
+        throw new Error("Unauthorized: You do not have permission to add fields to this person.");
       }
 
       // Create the dynamic field
@@ -341,15 +361,21 @@ export class PersonService {
   /**
    * Remove a dynamic field from a person
    */
-  async removeDynamicField(fieldId: string): Promise<{ success: boolean; message: string }> {
+  async removeDynamicField(fieldId: string, userId?: string): Promise<{ success: boolean; message: string }> {
     try {
-      // Check if field exists
+      // Check if field exists and get its associated person
       const existingField = await prisma.dynamicField.findUnique({
         where: { id: fieldId },
+        include: { person: true } // Include the person to check ownership
       });
 
       if (!existingField) {
         throw new Error(`Dynamic field with ID ${fieldId} not found`);
+      }
+
+      // Authorization check: Ensure the user owns the associated person record
+      if (!userId || !existingField.person || existingField.person.createdById !== userId) {
+         throw new Error("Unauthorized: You do not have permission to remove this field.");
       }
 
       // Delete the field

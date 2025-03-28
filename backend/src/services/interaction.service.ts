@@ -8,19 +8,12 @@
  * by running: npm run prisma:generate
  */
 
-import { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
+import prisma from "../prisma";
 import tagService from "./tag.service";
 
-// Define our own enum to match the schema
-export enum InteractionType {
-  CALL = "CALL",
-  EMAIL = "EMAIL",
-  MEETING = "MEETING",
-  NOTE = "NOTE",
-  TASK = "TASK",
-  OTHER = "OTHER"
-}
+// Import Prisma-generated enum
+import { InteractionType } from "@prisma/client";
 
 export interface InteractionLog {
   id: string;
@@ -33,26 +26,6 @@ export interface InteractionLog {
   createdById?: string | null;
   person?: any; // We don't need the full Person type in this service
   structuredTags?: any[]; // Tags from the Tag model
-}
-
-// Define a type that extends PrismaClient with our models
-// This is a workaround until the Prisma client is regenerated
-interface ExtendedPrismaClient extends PrismaClient {
-  interactionLog: any;
-  interactionTag: any;
-  tag: any;
-}
-
-// Use a singleton pattern for PrismaClient to make it easier to mock in tests
-let prisma: ExtendedPrismaClient;
-
-// Check if we're in a test environment
-if (process.env.NODE_ENV === 'test') {
-  // In test environment, prisma will be mocked by the test
-  prisma = (global as any).prisma as ExtendedPrismaClient;
-} else {
-  // In production/development, create a new instance
-  prisma = new PrismaClient() as ExtendedPrismaClient;
 }
 
 // Define interfaces for our service methods
@@ -262,7 +235,7 @@ export class InteractionService {
   /**
    * Update an interaction log
    */
-  async updateInteraction(id: string, data: UpdateInteractionInput): Promise<InteractionLog> {
+  async updateInteraction(id: string, data: UpdateInteractionInput, userId?: string): Promise<InteractionLog> {
     try {
       // Check if interaction exists
       const existingInteraction = await prisma.interactionLog.findUnique({
@@ -271,6 +244,11 @@ export class InteractionService {
 
       if (!existingInteraction) {
         throw new Error(`Interaction log with ID ${id} not found`);
+      }
+
+      // Authorization check: Ensure the user owns the record
+      if (!userId || existingInteraction.createdById !== userId) {
+        throw new Error("Unauthorized: You do not have permission to update this interaction.");
       }
 
       // Update the interaction
@@ -342,7 +320,7 @@ export class InteractionService {
   /**
    * Delete an interaction log
    */
-  async deleteInteraction(id: string): Promise<{ success: boolean; message: string }> {
+  async deleteInteraction(id: string, userId?: string): Promise<{ success: boolean; message: string }> {
     try {
       // Check if interaction exists
       const existingInteraction = await prisma.interactionLog.findUnique({
@@ -351,6 +329,11 @@ export class InteractionService {
 
       if (!existingInteraction) {
         throw new Error(`Interaction log with ID ${id} not found`);
+      }
+
+      // Authorization check: Ensure the user owns the record
+      if (!userId || existingInteraction.createdById !== userId) {
+        throw new Error("Unauthorized: You do not have permission to delete this interaction.");
       }
 
       // Delete the interaction
@@ -367,7 +350,7 @@ export class InteractionService {
   /**
    * Add tags to an interaction log by tag IDs
    */
-  async addTagsById(id: string, tagIds: string[]): Promise<InteractionLog> {
+  async addTagsById(id: string, tagIds: string[], userId?: string): Promise<InteractionLog> {
     try {
       // Check if interaction exists
       const existingInteraction = await prisma.interactionLog.findUnique({
@@ -376,6 +359,11 @@ export class InteractionService {
 
       if (!existingInteraction) {
         throw new Error(`Interaction log with ID ${id} not found`);
+      }
+
+      // Authorization check: Ensure the user owns the record
+      if (!userId || existingInteraction.createdById !== userId) {
+        throw new Error("Unauthorized: You do not have permission to modify tags for this interaction.");
       }
 
       // Associate tags with interaction
@@ -419,7 +407,7 @@ export class InteractionService {
   /**
    * Remove tags from an interaction log by tag IDs
    */
-  async removeTagsById(id: string, tagIds: string[]): Promise<InteractionLog> {
+  async removeTagsById(id: string, tagIds: string[], userId?: string): Promise<InteractionLog> {
     try {
       // Check if interaction exists
       const existingInteraction = await prisma.interactionLog.findUnique({
@@ -428,6 +416,11 @@ export class InteractionService {
 
       if (!existingInteraction) {
         throw new Error(`Interaction log with ID ${id} not found`);
+      }
+
+      // Authorization check: Ensure the user owns the record
+      if (!userId || existingInteraction.createdById !== userId) {
+        throw new Error("Unauthorized: You do not have permission to modify tags for this interaction.");
       }
 
       // Remove tag associations

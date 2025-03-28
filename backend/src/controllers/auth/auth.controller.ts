@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { PrismaClient } from "@prisma/client";
 import { sendPasswordResetEmail, sendPasswordChangedEmail } from "../../utils/email";
 import { 
   generateToken, 
@@ -9,19 +8,11 @@ import {
   isTokenExpired,
   checkResetRateLimit
 } from "../../utils/token";
+import prisma from "../../prisma";
 
-// Use a singleton pattern for PrismaClient to make it easier to mock in tests
-let prisma: PrismaClient;
-
-// Check if we're in a test environment
-if (process.env.NODE_ENV === 'test') {
-  // In test environment, prisma will be mocked by the test
-  prisma = (global as any).prisma;
-} else {
-  // In production/development, create a new instance
-  prisma = new PrismaClient();
-}
-const JWT_SECRET = process.env.JWT_SECRET || "your-default-jwt-secret";
+// !!! SECURITY WARNING: Ensure JWT_SECRET environment variable is set to a strong, unique secret in production!
+const JWT_SECRET = process.env.JWT_SECRET || "your-default-jwt-secret"; 
+const BCRYPT_SALT_ROUNDS = 12; // Increased salt rounds
 
 // Register a new user
 export const register = async (req: Request, res: Response): Promise<void> => {
@@ -39,7 +30,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Hash the password
-    const salt = await bcrypt.genSalt(10);
+    const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS);
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // Create the user
@@ -81,8 +72,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       where: { email },
     });
 
+    // Check if user exists and password is valid in a way that prevents user enumeration
     if (!user) {
-      res.status(404).json({ error: "User not found" });
+      // Still perform a hash comparison to make timing attacks harder, even though user doesn't exist.
+      // Use a dummy hash. Ensure the dummy hash format matches real hashes.
+      const dummyHash = `$2b$${BCRYPT_SALT_ROUNDS}$invalidhashinvalidhashinvalidhashinvalidhashinvalidhas`;
+      await bcrypt.compare(password, dummyHash); 
+      res.status(401).json({ error: "Invalid credentials" });
       return;
     }
 
@@ -96,8 +92,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     // Check if 2FA is enabled
     if (user.twoFactorEnabled) {
-      // For 2FA flow, we would generate a temporary token
-      // This is simplified for the MVP
+      // TODO: Implement proper 2FA verification flow (e.g., TOTP)
+      // For 2FA flow, we would generate a temporary token and require verification
       res.status(200).json({
         requireTwoFactor: true,
         userId: user.id,
@@ -224,7 +220,7 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
     }
 
     // Hash the new password
-    const salt = await bcrypt.genSalt(10);
+    const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS);
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // Update the user's password
@@ -254,14 +250,11 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
 
 // Logout user
 export const logout = async (req: Request, res: Response): Promise<void> => {
-  // Since we're using JWT, we don't need to do anything server-side
-  // The client will remove the token from storage
-  // This endpoint is mainly for logging purposes or future extensions
-  
+  // For stateless JWT, logout is primarily handled client-side by discarding the token.
+  // For enhanced security, implement a server-side token blacklist (e.g., using Redis or a database table)
+  // to immediately invalidate the token upon logout.
   try {
-    // You could implement token blacklisting here if needed
-    // For now, we just return a success message
-    
+    // Example: await blacklistToken(req.headers.authorization?.split(' ')[1]);
     res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {
     console.error("Logout error:", error);
@@ -350,8 +343,12 @@ export const toggleTwoFactor = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    // In a real implementation, we would generate and store a 2FA secret
-    // For MVP, we just toggle the flag
+    // --- 2FA Placeholder ---
+    // TODO: This is an MVP placeholder. A real implementation requires:
+    // 1. Generating a unique secret per user (e.g., using speakeasy).
+    // 2. Displaying QR code/secret to the user for authenticator app setup.
+    // 3. Verifying the TOTP code provided by the user during login and 2FA setup/toggle.
+    // 4. Implementing recovery codes.
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {

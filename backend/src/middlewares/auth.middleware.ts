@@ -1,7 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
+// !!! SECURITY WARNING: Ensure JWT_SECRET environment variable is set to a strong, unique secret in production!
 const JWT_SECRET = process.env.JWT_SECRET || "your-default-jwt-secret";
+
+// TODO: Consider implementing a token blacklist (e.g., in Redis) to check against during verification
+// for immediate invalidation of compromised/logged-out tokens.
 
 // Extend the Express Request type to include user
 declare global {
